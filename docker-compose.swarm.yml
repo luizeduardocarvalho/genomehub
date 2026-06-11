@@ -1,0 +1,125 @@
+# Multi-node swarm in containers: tracker + origin + two peers, each node in its
+# own container with its own store volume (no shared-filesystem badger-lock
+# quirks). Peers are filled by a one-shot init container (downloads TAIR10 from
+# the swarm) that exits before the peer's node starts on the same volume — badger
+# locks a store to one process, so init and node never run concurrently.
+#
+#   scripts/seed.sh                              # host: seed ./sim (origin store + catalog)
+#
+# One-shot (build, run the client download, tear down):
+#   docker compose -f docker-compose.swarm.yml up --build \
+#     --abort-on-container-exit --exit-code-from client
+#
+# Long-lived swarm to watch + drive by hand:
+#   docker compose -f docker-compose.swarm.yml up -d tracker origin peer1 peer2
+#   # run a client against the running swarm — MUST use --no-deps, otherwise
+#   # compose re-runs peer-init, which collides with the live peer node on the
+#   # same store volume (badger locks a store to one process) and fails:
+#   docker compose -f docker-compose.swarm.yml run --rm --no-deps client
+#
+# Watch from the host (ports published below):
+#   ./genomehub top    --tracker http://localhost:9000 --interval 1s
+#   ./genomehub status --server  http://localhost:8080   # origin
+#   ./genomehub status --server  http://localhost:8081   # peer1
+#   ./genomehub status --server  http://localhost:8082   # peer2
+
+services:
+  tracker:
+    build: .
+    command: ["tracker", "--addr", ":9000"]
+    ports: ["9000:9000"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  origin:
+    build: .
+    command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
+              "--addr", ":8080", "--advertise", "http://origin:8080",
+              "--catalog", "/data/catalog", "--heartbeat", "2s"]
+    volumes:
+      - ./sim/origin-store:/data/store
+      - ./sim/catalog:/data/catalog:ro
+    ports: ["8080:8080"]
+    depends_on:
+      tracker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # peer1: fill the volume (one-shot), then serve from it.
+  peer1-init:
+    build: .
+    command: ["--store", "/data/store", "download", "--tracker", "http://tracker:9000",
+              "--server", "http://origin:8080", "--assembly", "TAIR10", "--output", "/tmp/t.fa"]
+    volumes:
+      - peer1-store:/data/store
+    depends_on:
+      origin: {condition: service_healthy}
+    restart: "no"
+
+  peer1:
+    build: .
+    command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
+              "--addr", ":8080", "--advertise", "http://peer1:8080",
+              "--catalog", "/data/empty", "--heartbeat", "2s"]
+    volumes:
+      - peer1-store:/data/store
+      - ./sim/empty-catalog:/data/empty:ro
+    ports: ["8081:8080"]
+    depends_on:
+      peer1-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  peer2-init:
+    build: .
+    command: ["--store", "/data/store", "download", "--tracker", "http://tracker:9000",
+              "--server", "http://origin:8080", "--assembly", "TAIR10", "--output", "/tmp/t.fa"]
+    volumes:
+      - peer2-store:/data/store
+    depends_on:
+      origin: {condition: service_healthy}
+    restart: "no"
+
+  peer2:
+    build: .
+    command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
+              "--addr", ":8080", "--advertise", "http://peer2:8080",
+              "--catalog", "/data/empty", "--heartbeat", "2s"]
+    volumes:
+      - peer2-store:/data/store
+      - ./sim/empty-catalog:/data/empty:ro
+    ports: ["8082:8080"]
+    depends_on:
+      peer2-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # one-shot: download Ler0 from the swarm in parallel — segments spread across
+  # origin + peer1 + peer2. Watch the status panels light up together.
+  client:
+    build: .
+    command: ["--store", "/data/store", "download", "--tracker", "http://tracker:9000",
+              "--server", "http://origin:8080", "--assembly", "Ler0",
+              "--output", "/tmp/Ler0.fa", "--parallel", "8"]
+    volumes:
+      - client-store:/data/store
+    depends_on:
+      peer1: {condition: service_healthy}
+      peer2: {condition: service_healthy}
+
+volumes:
+  peer1-store:
+  peer2-store:
+  client-store:

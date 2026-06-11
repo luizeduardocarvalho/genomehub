@@ -1,0 +1,31 @@
+# OS
+.DS_Store
+
+# Go build artifacts
+*.exe
+*.test
+*.out
+/genome-hub
+/genomehub-bin
+
+# Genome data & artifacts (large, regenerable)
+*.fa
+*.fna
+*.fasta
+*.paf
+*.manifest.json
+*.zip
+alignments.json
+result.txt
+*.log
+
+# Runtime data stores / simulation state
+/tmp/
+/sim/aligncache/
+/sim/catalog/
+/sim/empty-catalog/
+/sim/index/
+/sim/logs/
+/sim/sketches/
+/sim/*-store/
+/sim/*.fa

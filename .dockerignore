@@ -1,0 +1,15 @@
+# keep the build context tiny — only source is needed to build the binary
+tmp/
+sim/
+*.manifest.json
+*.delta.ghd
+*.delta.json
+*.sketch.json
+*.paf
+*.zip
+*.log
+alignments.json
+result.txt
+genomehub
+.git/
+.DS_Store

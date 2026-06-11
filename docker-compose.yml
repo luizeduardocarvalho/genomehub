@@ -1,0 +1,53 @@
+# Simulates the server/client boundary with containers. One origin node serves a
+# pre-seeded store + catalog (run scripts/seed.sh on the host first); two client
+# nodes download the same genome under different cache states to show the
+# bandwidth difference. This scales to multi-node later: a peer is just a client
+# that also runs `serve`.
+#
+#   scripts/seed.sh         # host-side: import TAIR10, build Ler0 delta into ./sim
+#   docker compose up --build
+
+services:
+  origin:
+    build: .
+    command: ["--store", "/data/store", "serve", "--catalog", "/data/catalog", "--addr", ":8080"]
+    volumes:
+      - ./sim/origin-store:/data/store
+      - ./sim/catalog:/data/catalog:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  # Empty store: must pull the reference (TAIR10) segments AND the Ler0 delta.
+  client-cold:
+    build: .
+    depends_on:
+      origin:
+        condition: service_healthy
+    command: ["--store", "/data/store", "download", "--server", "http://origin:8080", "--assembly", "Ler0", "--output", "/data/Ler0.fa"]
+    volumes:
+      - client-cold-store:/data/store
+
+  # Warm store: download TAIR10 first (the reference), then Ler0 costs only the
+  # delta — the bandwidth win, demonstrated across the network boundary.
+  client-warm:
+    build: .
+    depends_on:
+      origin:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        genomehub --store /data/store download --server http://origin:8080 --assembly TAIR10 --output /data/TAIR10.fa &&
+        echo '--- TAIR10 now local; downloading Ler0 (delta only) ---' &&
+        genomehub --store /data/store download --server http://origin:8080 --assembly Ler0 --output /data/Ler0.fa
+    volumes:
+      - client-warm-store:/data/store
+
+volumes:
+  client-cold-store:
+  client-warm-store:
