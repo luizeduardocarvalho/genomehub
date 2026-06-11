@@ -7,15 +7,16 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 
-	"github.com/luizcarvalho/genome-hub/internal/delta"
-	"github.com/luizcarvalho/genome-hub/internal/events"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/delta"
+	"github.com/luizeduardocarvalho/genomehub/internal/events"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -114,6 +115,17 @@ func runDownload(_ *cobra.Command, _ []string) error {
 // isGHD1 reports whether body is a raw delta blob (vs a JSON recipe).
 func isGHD1(body []byte) bool {
 	return len(body) >= 4 && string(body[:4]) == "GHD1"
+}
+
+// saveManifestCache writes a fetched manifest to the manifest cache dir so a
+// co-located node can serve it and report seeding coverage. Best-effort: a
+// failure here never fails the download.
+func saveManifestCache(assembly string, body []byte) {
+	dir := manifestCacheDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dir, assembly+".manifest.json"), body, 0o644)
 }
 
 // fetchGenome reconstructs a genome by assembly: a delta (recipe or raw) if the
@@ -216,6 +228,10 @@ func (d *downloader) fromManifest(assembly string) ([]fasta.Chromosome, error) {
 	if err := d.fetchAll(allHashes); err != nil {
 		return nil, err
 	}
+
+	// Persist the manifest beside the store so a node serving this box can name
+	// the genome it now holds segments for (seeding coverage + attribution).
+	saveManifestCache(assembly, body)
 
 	var chroms []fasta.Chromosome
 	for _, c := range m.Chromosomes {

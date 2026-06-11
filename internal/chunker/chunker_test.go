@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/luizcarvalho/genome-hub/internal/chunker"
+	"github.com/luizeduardocarvalho/genomehub/internal/chunker"
 )
 
 var smallCfg = chunker.Config{MinSize: 16, MaxSize: 64}

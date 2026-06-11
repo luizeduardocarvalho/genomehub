@@ -1,4 +1,4 @@
-module github.com/luizcarvalho/genome-hub
+module github.com/luizeduardocarvalho/genomehub
 
 go 1.23.0
 

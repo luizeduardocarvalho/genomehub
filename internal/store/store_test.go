@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 )
 
 func openTestStore(t *testing.T) *store.Store {

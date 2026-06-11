@@ -1,6 +1,6 @@
 package main
 
-import "github.com/luizcarvalho/genome-hub/cmd"
+import "github.com/luizeduardocarvalho/genomehub/cmd"
 
 func main() {
 	cmd.Execute()

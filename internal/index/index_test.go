@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/index"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/index"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
 )
 
 func openIndex(t *testing.T) *index.Index {

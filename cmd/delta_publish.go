@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/luizcarvalho/genome-hub/internal/chunker"
-	"github.com/luizcarvalho/genome-hub/internal/delta"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/chunker"
+	"github.com/luizeduardocarvalho/genomehub/internal/delta"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 

@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
-	"github.com/luizcarvalho/genome-hub/internal/delta"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/delta"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 	"github.com/spf13/cobra"
 )
 

@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v4"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
 )
 
 const (

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 )
 
 // roundTrip builds a delta from blocks then applies it, asserting the

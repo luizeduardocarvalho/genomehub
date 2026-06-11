@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
 	"github.com/spf13/cobra"
 )
 

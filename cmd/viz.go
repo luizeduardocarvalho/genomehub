@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/luizcarvalho/genome-hub/internal/index"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/index"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
 	"github.com/spf13/cobra"
 )
 

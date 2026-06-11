@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/sketch"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/sketch"
 	"github.com/spf13/cobra"
 )
 

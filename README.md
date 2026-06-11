@@ -451,8 +451,25 @@ genomehub jobs   --coordinator http://coord:9100 --watch   # MEM jobs: queue, ti
 ```
 
 `control` is the dashboard for the layer we own (origin archive + tracker + coordinator);
-each panel degrades on its own, so a down endpoint never blanks the others. `status
---tracker` is the participant's self-view: "am I online, and how much am I reseeding?"
+each panel degrades on its own, so a down endpoint never blanks the others.
+
+`status` is the participant's self-view — what a peer or worker watches on their own box:
+
+- **SEEDING** — every genome you can serve with a coverage bar: full seed
+  (`▓▓▓▓ 100%`), partial cache (`▓▓░░ 60%`), or file-served delta. Answers
+  "am I seeding X?" A pure cache peer (started with an empty catalog) still
+  reports coverage: `download` saves each fetched manifest beside the store, and
+  a node merges that cache into its catalog — so a box that downloaded TAIR10
+  shows `TAIR10 100%` and attributes served segments to it, with no manifest
+  hand-placed in the catalog.
+- **SERVING** — live upload rate (req/s · bytes/s, last 10s) and the last
+  requests you served, each attributed to its genome. Answers "am I a source
+  right now?"
+- **RECENT** — your last imports/downloads, read from a local `events.jsonl`
+  the `import`/`download` commands append to (so history survives even though
+  those are separate one-shot processes).
+- **SWARM STANDING** (with `--tracker`) — how the tracker sees you: online,
+  segments reseeded for peers, heartbeat age.
 
 ---
 

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
 )
 
 func sampleChroms() []manifest.Chromosome {

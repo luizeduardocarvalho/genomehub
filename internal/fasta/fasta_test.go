@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 )
 
 func writeFASTA(t *testing.T, content string) string {

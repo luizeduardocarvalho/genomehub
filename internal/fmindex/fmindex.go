@@ -39,7 +39,7 @@ package fmindex
 import (
 	"sort"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

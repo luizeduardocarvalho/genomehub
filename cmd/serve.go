@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/luizcarvalho/genome-hub/internal/httpapi"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -48,6 +48,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("scan catalog %s: %w", serveCatalog, err)
 	}
+	mergeManifestCache(cat)
 
 	fmt.Fprintf(os.Stderr, "serving on %s\n", serveAddr)
 	fmt.Fprintf(os.Stderr, "  store:   %s\n", storeDir)
@@ -60,4 +61,21 @@ func runServe(_ *cobra.Command, _ []string) error {
 	}
 
 	return http.ListenAndServe(serveAddr, httpapi.NewHandler(s, cat, eventsPath()))
+}
+
+// mergeManifestCache overlays manifests previously fetched by `download` (kept in
+// manifestCacheDir) onto the node's catalog, without overriding catalog entries.
+// This lets a pure cache peer — started with an empty catalog — still name the
+// genomes it holds segments for, so SEEDING shows real coverage instead of
+// "nothing". Best-effort: a missing/empty cache dir is simply a no-op.
+func mergeManifestCache(cat *httpapi.Catalog) {
+	cached, err := httpapi.ScanCatalog(manifestCacheDir())
+	if err != nil {
+		return
+	}
+	for a, p := range cached.Manifests {
+		if _, ok := cat.Manifests[a]; !ok {
+			cat.Manifests[a] = p
+		}
+	}
 }

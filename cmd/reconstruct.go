@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 

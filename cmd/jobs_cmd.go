@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/jobs"
+	"github.com/luizeduardocarvalho/genomehub/internal/jobs"
 	"github.com/spf13/cobra"
 )
 

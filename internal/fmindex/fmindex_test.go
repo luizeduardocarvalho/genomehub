@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/luizcarvalho/genome-hub/internal/fmindex"
+	"github.com/luizeduardocarvalho/genomehub/internal/fmindex"
 )
 
 func must(target, query string, minLen int) string {

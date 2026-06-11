@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
-	"github.com/luizcarvalho/genome-hub/internal/chunker"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/index"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/chunker"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/index"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 

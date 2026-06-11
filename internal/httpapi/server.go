@@ -18,10 +18,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/delta"
-	"github.com/luizcarvalho/genome-hub/internal/events"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/delta"
+	"github.com/luizeduardocarvalho/genomehub/internal/events"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 )
 
 // Catalog maps assembly names to the manifest / delta files that describe them.
@@ -128,10 +128,10 @@ type server struct {
 	reqs       atomic.Int64
 	bytes      atomic.Int64
 
-	mu      sync.Mutex
-	rateWin []hit            // requests within rateWindow (pruned)
-	feed    []hit            // last feedSize requests (ring)
-	segOf   map[string]string // segment hash (no prefix) -> assembly
+	mu       sync.Mutex
+	rateWin  []hit             // requests within rateWindow (pruned)
+	feed     []hit             // last feedSize requests (ring)
+	segOf    map[string]string // segment hash (no prefix) -> assembly
 	covCache map[string]segset // assembly -> its manifest segment hash set
 }
 

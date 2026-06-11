@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/tracker"
+	"github.com/luizeduardocarvalho/genomehub/internal/tracker"
 	"github.com/spf13/cobra"
 )
 

@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/events"
-	"github.com/luizcarvalho/genome-hub/internal/httpapi"
-	"github.com/luizcarvalho/genome-hub/internal/tracker"
+	"github.com/luizeduardocarvalho/genomehub/internal/events"
+	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
+	"github.com/luizeduardocarvalho/genomehub/internal/tracker"
 	"github.com/spf13/cobra"
 )
 
@@ -229,7 +229,7 @@ func recentPanel(evs []events.Event) string {
 			icon, verb = "↑", "import"
 		}
 		ago := fmtAge(int(time.Since(e.Time).Seconds()))
-		line := fmt.Sprintf("  %s %-8s %-14s %9s  %d seg  %sago %s%s",
+		line := fmt.Sprintf("  %s %-8s %-14s %9s  %d seg  %s%s ago%s",
 			icon, verb, trunc(e.Assembly, 14), fmtBytesInt(e.Bytes), e.Segments, ansiDim, ago, ansiReset)
 		if e.Note != "" {
 			line += fmt.Sprintf("  %s(%s)%s", ansiDim, e.Note, ansiReset)

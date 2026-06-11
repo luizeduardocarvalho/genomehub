@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/chunker"
-	"github.com/luizcarvalho/genome-hub/internal/events"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/index"
-	"github.com/luizcarvalho/genome-hub/internal/manifest"
-	"github.com/luizcarvalho/genome-hub/internal/sketch"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/chunker"
+	"github.com/luizeduardocarvalho/genomehub/internal/events"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/index"
+	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/sketch"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 

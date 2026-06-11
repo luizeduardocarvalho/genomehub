@@ -19,9 +19,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/aligner"
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/aligner"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 )
 
 // OpType is the kind of a reconstruction operation.

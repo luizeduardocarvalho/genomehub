@@ -47,6 +47,14 @@ func eventsPath() string {
 	return filepath.Join(filepath.Dir(storeDir), "events.jsonl")
 }
 
+// manifestCacheDir holds manifests fetched by `download`, kept beside the store.
+// A node merges these into its catalog so a pure cache peer can name (and show
+// coverage for) the genomes whose segments it holds — answering "am I seeding X?"
+// even when it was started with an empty catalog.
+func manifestCacheDir() string {
+	return filepath.Join(filepath.Dir(storeDir), "manifests")
+}
+
 func init() {
 	home, _ := os.UserHomeDir()
 	defaultStore := filepath.Join(home, ".genomehub", "segments")

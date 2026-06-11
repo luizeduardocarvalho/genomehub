@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/luizcarvalho/genome-hub/internal/fasta"
+	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 	"github.com/spf13/cobra"
 )
 

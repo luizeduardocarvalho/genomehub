@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/luizcarvalho/genome-hub/internal/httpapi"
-	"github.com/luizcarvalho/genome-hub/internal/store"
+	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
+	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -72,6 +72,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("scan catalog: %w", err)
 	}
+	mergeManifestCache(cat)
 
 	srv := &http.Server{Addr: nodeAddr, Handler: httpapi.NewHandler(s, cat, eventsPath())}
 	go func() {
