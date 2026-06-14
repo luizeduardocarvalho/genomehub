@@ -8,7 +8,8 @@ import (
 )
 
 type Store struct {
-	db *badger.DB
+	db    *badger.DB
+	cache *lruCache // nil = unbounded (origin); set via SetCacheLimit (cache node)
 }
 
 func Open(dir string) (*Store, error) {
@@ -42,6 +43,12 @@ func (s *Store) Put(data []byte) (string, error) {
 		}
 		return txn.Set(key, data)
 	})
+	if err == nil && s.cache != nil {
+		// Record the new (or refreshed) key, then evict LRU keys until under cap.
+		for _, k := range s.cache.add(hash, int64(len(data))) {
+			_ = s.db.Update(func(txn *badger.Txn) error { return txn.Delete([]byte(k)) })
+		}
+	}
 	return hash, err
 }
 
@@ -55,6 +62,9 @@ func (s *Store) Get(hash string) ([]byte, error) {
 		val, err = item.ValueCopy(nil)
 		return err
 	})
+	if err == nil && s.cache != nil {
+		s.cache.touch(hash) // reading a segment marks it recently used
+	}
 	return val, err
 }
 
@@ -93,7 +103,53 @@ func (s *Store) Has(hash string) (bool, error) {
 // must ensure no still-held genome references the hash (segments are shared, so
 // reference-counting is the caller's responsibility).
 func (s *Store) Delete(hash string) error {
-	return s.db.Update(func(txn *badger.Txn) error {
+	err := s.db.Update(func(txn *badger.Txn) error {
 		return txn.Delete([]byte(hash))
 	})
+	if err == nil && s.cache != nil {
+		s.cache.remove(hash)
+	}
+	return err
+}
+
+// SetCacheLimit turns this store into a bounded LRU cache of at most maxBytes:
+// least-recently-used segments are evicted when a Put would exceed the cap. It
+// builds the recency index from the keys already present and evicts down to the
+// cap immediately. maxBytes <= 0 leaves the store unbounded (the default, and
+// what an origin should use — it is the source of truth, not a cache).
+func (s *Store) SetCacheLimit(maxBytes int64) error {
+	if maxBytes <= 0 {
+		return nil
+	}
+	c := newLRU(maxBytes)
+	var toEvict []string
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = false
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			toEvict = append(toEvict, c.add(string(item.KeyCopy(nil)), item.ValueSize())...)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.cache = c
+	for _, k := range toEvict {
+		if err := s.Delete(k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CacheStats reports current and maximum cache bytes; both zero when unbounded.
+func (s *Store) CacheStats() (cur, max int64) {
+	if s.cache == nil {
+		return 0, 0
+	}
+	return s.cache.stats()
 }

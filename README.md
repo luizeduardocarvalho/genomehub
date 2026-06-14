@@ -607,6 +607,27 @@ genomehub publish --manifest MySoy.manifest.json \
   (`422` otherwise), so the catalog never gains an unreconstructable genome.
 - Writes are auth-gated like the control plane; reads stay open.
 
+#### Resource limits
+
+On an open network a node needs to bound both what it stores and how hard it can
+be hit:
+
+```bash
+genomehub node --tracker https://tracker:9000 --catalog ./catalog \
+  --cache-max 50GB \   # bounded LRU segment cache (cache nodes only — NOT an origin)
+  --rate 100           # max requests/second per client IP
+```
+
+- `--cache-max <size>` turns the store into a size-capped LRU cache: when a
+  fetch would exceed the cap, least-recently-used segments are evicted (reads and
+  writes both refresh recency). **Do not set it on an origin** — the origin is the
+  source of truth, not a cache. Empty = unbounded (the default).
+- `--rate <n>` caps requests per second per client IP (burst 2×n); excess gets
+  `429 Too Many Requests`. Applied outermost, so a flood is rejected before auth
+  and store work. `0` = unlimited (default).
+- Uploaded segment/manifest bodies are already capped at 64 MiB (see
+  [Publishing](#publishing-a-genome-to-an-origin)).
+
 ### Distributed MEM-finding
 
 ```bash

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
 	"github.com/luizeduardocarvalho/genomehub/internal/sign"
 	"github.com/luizeduardocarvalho/genomehub/internal/store"
@@ -18,6 +20,8 @@ var (
 	serveTLSCert  string
 	serveTLSKey   string
 	serveSignKey  string
+	serveRate     float64
+	serveCacheMax string
 )
 
 var serveCmd = &cobra.Command{
@@ -43,6 +47,8 @@ func init() {
 	serveCmd.Flags().StringVar(&serveTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
 	serveCmd.Flags().StringVar(&serveTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
 	serveCmd.Flags().StringVar(&serveSignKey, "sign-key", "", "ed25519 private key file (from `keygen`); signs served manifests")
+	serveCmd.Flags().Float64Var(&serveRate, "rate", 0, "max requests/second per client IP (0 = unlimited)")
+	serveCmd.Flags().StringVar(&serveCacheMax, "cache-max", "", "bounded LRU cache size, e.g. 50GB (empty = unbounded; do not set on an origin)")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -52,6 +58,10 @@ func runServe(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("open store: %w", err)
 	}
 	defer s.Close()
+
+	if err := applyCacheLimit(s, serveCacheMax); err != nil {
+		return err
+	}
 
 	cat, err := httpapi.ScanCatalog(serveCatalog)
 	if err != nil {
@@ -73,9 +83,27 @@ func runServe(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "", opts...))
+	h := httpapi.RateLimit(serveRate, httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "", opts...)))
 	warnIfControlPlaneOpen()
 	return listenAndServe(&http.Server{Addr: serveAddr, Handler: h}, serveTLSCert, serveTLSKey)
+}
+
+// applyCacheLimit parses a human size (e.g. "50GB") and bounds the store to it
+// as an LRU cache. Empty leaves the store unbounded (the origin default).
+func applyCacheLimit(s *store.Store, sizeStr string) error {
+	if strings.TrimSpace(sizeStr) == "" {
+		return nil
+	}
+	n, err := humanize.ParseBytes(sizeStr)
+	if err != nil {
+		return fmt.Errorf("parse --cache-max %q: %w", sizeStr, err)
+	}
+	if err := s.SetCacheLimit(int64(n)); err != nil {
+		return fmt.Errorf("set cache limit: %w", err)
+	}
+	cur, max := s.CacheStats()
+	fmt.Fprintf(os.Stderr, "  cache:   bounded to %s (currently %s)\n", humanize.Bytes(uint64(max)), humanize.Bytes(uint64(cur)))
+	return nil
 }
 
 // signerOpts loads the signing key (if any), signs any catalog manifests that

@@ -28,6 +28,8 @@ var (
 	nodeTLSCert   string
 	nodeTLSKey    string
 	nodeSignKey   string
+	nodeRate      float64
+	nodeCacheMax  string
 )
 
 var nodeCmd = &cobra.Command{
@@ -55,6 +57,8 @@ func init() {
 	nodeCmd.Flags().StringVar(&nodeTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
 	nodeCmd.Flags().StringVar(&nodeTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
 	nodeCmd.Flags().StringVar(&nodeSignKey, "sign-key", "", "ed25519 private key file (from `keygen`); signs served manifests")
+	nodeCmd.Flags().Float64Var(&nodeRate, "rate", 0, "max requests/second per client IP (0 = unlimited)")
+	nodeCmd.Flags().StringVar(&nodeCacheMax, "cache-max", "", "bounded LRU cache size, e.g. 50GB (empty = unbounded)")
 	nodeCmd.MarkFlagRequired("tracker")
 	rootCmd.AddCommand(nodeCmd)
 }
@@ -85,6 +89,10 @@ func runNode(_ *cobra.Command, _ []string) error {
 	}
 	defer s.Close()
 
+	if err := applyCacheLimit(s, nodeCacheMax); err != nil {
+		return err
+	}
+
 	cat, err := httpapi.ScanCatalog(nodeCatalog)
 	if err != nil {
 		return fmt.Errorf("scan catalog: %w", err)
@@ -95,7 +103,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker, opts...))
+	h := httpapi.RateLimit(nodeRate, httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker, opts...)))
 	warnIfControlPlaneOpen()
 	srv := &http.Server{Addr: nodeAddr, Handler: h}
 	go func() {
