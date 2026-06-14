@@ -14,6 +14,8 @@ var (
 	serveAddr     string
 	serveCatalog  string
 	serveRegistry string
+	serveTLSCert  string
+	serveTLSKey   string
 )
 
 var serveCmd = &cobra.Command{
@@ -36,6 +38,8 @@ func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", ":8080", "listen address")
 	serveCmd.Flags().StringVar(&serveCatalog, "catalog", ".", "directory of *.manifest.json and *.delta.* files to serve")
 	serveCmd.Flags().StringVar(&serveRegistry, "registry", "", "upstream registry URL for the /discover endpoint (default: self)")
+	serveCmd.Flags().StringVar(&serveTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
+	serveCmd.Flags().StringVar(&serveTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -62,7 +66,22 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "    delta:    %s\n", a)
 	}
 
-	return http.ListenAndServe(serveAddr, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), ""))
+	h := httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "")
+	return listenAndServe(&http.Server{Addr: serveAddr, Handler: h}, serveTLSCert, serveTLSKey)
+}
+
+// listenAndServe starts srv with TLS when both cert and key are supplied, plain
+// HTTP otherwise. Supplying only one of the pair is a configuration error.
+func listenAndServe(srv *http.Server, certFile, keyFile string) error {
+	switch {
+	case certFile != "" && keyFile != "":
+		fmt.Fprintf(os.Stderr, "  TLS:     enabled (%s)\n", certFile)
+		return srv.ListenAndServeTLS(certFile, keyFile)
+	case certFile != "" || keyFile != "":
+		return fmt.Errorf("--tls-cert and --tls-key must be set together")
+	default:
+		return srv.ListenAndServe()
+	}
 }
 
 // mergeManifestCache overlays manifests previously fetched by `download` (kept in

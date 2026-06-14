@@ -25,6 +25,8 @@ var (
 	nodeID        string
 	nodeHeartbeat time.Duration
 	nodeRegistry  string
+	nodeTLSCert   string
+	nodeTLSKey    string
 )
 
 var nodeCmd = &cobra.Command{
@@ -49,14 +51,25 @@ func init() {
 	nodeCmd.Flags().StringVar(&nodeID, "id", "", "node id (default: advertised URL)")
 	nodeCmd.Flags().DurationVar(&nodeHeartbeat, "heartbeat", 30*time.Second, "heartbeat interval")
 	nodeCmd.Flags().StringVar(&nodeRegistry, "registry", "", "upstream registry URL (origin) for the /discover endpoint")
+	nodeCmd.Flags().StringVar(&nodeTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
+	nodeCmd.Flags().StringVar(&nodeTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
 	nodeCmd.MarkFlagRequired("tracker")
 	rootCmd.AddCommand(nodeCmd)
 }
 
 func runNode(_ *cobra.Command, _ []string) error {
+	if (nodeTLSCert == "") != (nodeTLSKey == "") {
+		return fmt.Errorf("--tls-cert and --tls-key must be set together")
+	}
+	tlsOn := nodeTLSCert != "" && nodeTLSKey != ""
+
 	advertise := nodeAdvertise
 	if advertise == "" {
-		advertise = "http://localhost" + nodeAddr
+		scheme := "http"
+		if tlsOn {
+			scheme = "https"
+		}
+		advertise = scheme + "://localhost" + nodeAddr
 	}
 	id := nodeID
 	if id == "" {
@@ -78,7 +91,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 
 	srv := &http.Server{Addr: nodeAddr, Handler: httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker)}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := listenAndServe(srv, nodeTLSCert, nodeTLSKey); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "serve error: %v\n", err)
 		}
 	}()

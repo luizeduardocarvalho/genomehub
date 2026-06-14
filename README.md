@@ -239,12 +239,19 @@ The slow minimap2/MEM-finding work happens once per genome pair on a server. Eve
 ### Integrity Chain
 
 ```
-TLS connection (trust the transport)
+TLS connection (trust the transport)            ← serve/node --tls-cert/--tls-key
   └── header (trusted because of TLS)
         └── manifest_hash in header (verifies manifest wasn't tampered)
               └── segments_root in manifest (verifies reconstructed sequence)
                     └── per-chromosome hash (verify any chromosome independently)
 ```
+
+TLS anchors the chain: it authenticates the origin so the manifest (and the
+hashes inside it) can be trusted. Segments themselves are content-addressed and
+re-hashed on arrival, so they need no transport trust — only the manifest does.
+Enable TLS with `--tls-cert`/`--tls-key` (see [TLS](#tls)). ed25519 manifest
+signing — for manifests served over untrusted peers, not just a trusted origin —
+is a planned follow-up.
 
 ---
 
@@ -500,6 +507,30 @@ genomehub node --tracker http://tracker:9000 --addr :8080 \ # long-lived peer: s
 genomehub download --server http://origin:8080 --tracker http://tracker:9000 \
   --assembly Ler0 --output Ler0.fa --parallel 8             # peer-first, parallel, re-hash-verified
 ```
+
+#### TLS
+
+`serve` and `node` speak plain HTTP by default (fine on a trusted LAN). For
+distribution over an untrusted network, enable TLS — this is what authenticates
+the manifest you fetch (every *segment* is already re-hashed end-to-end, so the
+remaining trust question is "is this the real origin's manifest?").
+
+```bash
+genomehub serve --catalog ./catalog --addr :8443 \
+  --tls-cert cert.pem --tls-key key.pem                     # HTTPS origin
+genomehub node  --tracker https://tracker:9000 --addr :8443 \
+  --advertise https://me:8443 --catalog ./catalog \
+  --tls-cert cert.pem --tls-key key.pem                     # HTTPS peer
+genomehub download --server https://origin:8443 --assembly Ler0 --output Ler0.fa
+```
+
+- Clients verify certificates against the system trust store — use a real cert
+  (Let's Encrypt, your institution's CA) in production.
+- For self-signed certs in dev/testing, add the global `--insecure` flag to
+  *client* commands to skip verification. Never use it against a real origin.
+- Prefer terminating TLS at a reverse proxy (Caddy/nginx/Traefik) if you already
+  run one — point it at the plain-HTTP `serve`/`node` on localhost. The built-in
+  flags exist so a single binary needs no proxy.
 
 ### Distributed MEM-finding
 
