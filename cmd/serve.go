@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
+	"github.com/luizeduardocarvalho/genomehub/internal/sign"
 	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -16,6 +17,7 @@ var (
 	serveRegistry string
 	serveTLSCert  string
 	serveTLSKey   string
+	serveSignKey  string
 )
 
 var serveCmd = &cobra.Command{
@@ -40,6 +42,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveRegistry, "registry", "", "upstream registry URL for the /discover endpoint (default: self)")
 	serveCmd.Flags().StringVar(&serveTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
 	serveCmd.Flags().StringVar(&serveTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
+	serveCmd.Flags().StringVar(&serveSignKey, "sign-key", "", "ed25519 private key file (from `keygen`); signs served manifests")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -66,9 +69,32 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "    delta:    %s\n", a)
 	}
 
-	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), ""))
+	opts, err := signerOpts(cat, serveSignKey)
+	if err != nil {
+		return err
+	}
+	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "", opts...))
 	warnIfControlPlaneOpen()
 	return listenAndServe(&http.Server{Addr: serveAddr, Handler: h}, serveTLSCert, serveTLSKey)
+}
+
+// signerOpts loads the signing key (if any), signs any catalog manifests that
+// lack a signature, and returns the handler option enabling signing. Shared by
+// serve and node.
+func signerOpts(cat *httpapi.Catalog, signKey string) ([]httpapi.Option, error) {
+	if signKey == "" {
+		return nil, nil
+	}
+	sg, err := sign.LoadSigner(signKey)
+	if err != nil {
+		return nil, fmt.Errorf("load sign key: %w", err)
+	}
+	n, err := httpapi.SignCatalogManifests(cat, sg)
+	if err != nil {
+		return nil, fmt.Errorf("sign catalog: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "  signing: enabled (pubkey %s); signed %d catalog manifest(s)\n", sg.PublicHex(), n)
+	return []httpapi.Option{httpapi.WithSigner(sg)}, nil
 }
 
 // warnIfControlPlaneOpen prints a loud warning when no token gates the mutating

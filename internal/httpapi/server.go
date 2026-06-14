@@ -23,8 +23,19 @@ import (
 	"github.com/luizeduardocarvalho/genomehub/internal/events"
 	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/sign"
 	"github.com/luizeduardocarvalho/genomehub/internal/store"
 )
+
+// Option configures a handler. Added as a variadic tail to NewHandler so
+// existing 6-arg callers (and tests) keep compiling.
+type Option func(*server)
+
+// WithSigner makes this node an origin that signs the manifests it installs and
+// serves their detached signatures at /genomes/{assembly}/manifest.sig.
+func WithSigner(s *sign.Signer) Option {
+	return func(srv *server) { srv.signer = s }
+}
 
 // Catalog maps assembly names to the manifest / delta files that describe them.
 type Catalog struct {
@@ -164,6 +175,8 @@ type server struct {
 	reqs        atomic.Int64
 	bytes       atomic.Int64
 
+	signer *sign.Signer // when set, manifests installed here are signed (origin)
+
 	mu        sync.Mutex
 	rateWin   []hit             // requests within rateWindow (pruned)
 	feed      []hit             // last feedSize requests (ring)
@@ -190,11 +203,14 @@ type segset struct {
 // (origin) the discover/track endpoints pull from (may be ""); manifestDir is
 // where tracked manifests are persisted (may be ""); manifests are lazily parsed
 // for coverage.
-func NewHandler(s *store.Store, cat *Catalog, eventsPath, registryURL, manifestDir, trackerURL string) http.Handler {
+func NewHandler(s *store.Store, cat *Catalog, eventsPath, registryURL, manifestDir, trackerURL string, opts ...Option) http.Handler {
 	srv := &server{start: time.Now(), store: s, eventsPath: eventsPath,
 		manifestDir: manifestDir, registryURL: strings.TrimRight(registryURL, "/"),
 		trackerURL: strings.TrimRight(trackerURL, "/")}
 	srv.catalog.Store(cat)
+	for _, o := range opts {
+		o(srv)
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -418,6 +434,35 @@ func NewHandler(s *store.Store, cat *Catalog, eventsPath, registryURL, manifestD
 		http.ServeFile(w, r, p)
 	})
 
+	// Detached ed25519 signature over the manifest bytes. Served from the file
+	// beside the manifest, so a peer relaying a tracked/downloaded manifest also
+	// relays the origin's signature it cached — authenticity survives the hop.
+	mux.HandleFunc("GET /genomes/{assembly}/manifest.sig", func(w http.ResponseWriter, r *http.Request) {
+		p, ok := srv.cur().Manifests[r.PathValue("assembly")]
+		if !ok {
+			http.Error(w, "no manifest for assembly", http.StatusNotFound)
+			return
+		}
+		sigPath := p + ".sig"
+		if _, err := os.Stat(sigPath); err != nil {
+			http.Error(w, "manifest not signed", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		http.ServeFile(w, r, sigPath)
+	})
+
+	// The origin's signing public key, so a client can pin it (and a peer can
+	// surface which origin it trusts). 404 on an unsigned node.
+	mux.HandleFunc("GET /pubkey", func(w http.ResponseWriter, _ *http.Request) {
+		if srv.signer == nil {
+			http.Error(w, "node does not sign", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintln(w, srv.signer.PublicHex())
+	})
+
 	mux.HandleFunc("GET /deltas/{assembly}", func(w http.ResponseWriter, r *http.Request) {
 		a := r.PathValue("assembly")
 		// Prefer the chunked recipe (swarms across peers); fall back to the raw
@@ -606,6 +651,12 @@ func (srv *server) installManifest(m *manifest.Manifest) (string, error) {
 	if err := m.Write(path); err != nil {
 		return "", fmt.Errorf("persist manifest: %w", err)
 	}
+	// Sign over the exact bytes that GET will serve (the file we just wrote).
+	if srv.signer != nil {
+		if err := signManifestFile(srv.signer, path); err != nil {
+			return "", fmt.Errorf("sign manifest: %w", err)
+		}
+	}
 
 	// Splice into a fresh catalog (copy-on-write) so concurrent readers are safe.
 	old := srv.cur()
@@ -624,6 +675,33 @@ func (srv *server) installManifest(m *manifest.Manifest) (string, error) {
 	delete(srv.discCache, m.Assembly)
 	srv.mu.Unlock()
 	return path, nil
+}
+
+// signManifestFile writes path+".sig" containing the detached signature over
+// the manifest file's exact bytes (the bytes GET serves).
+func signManifestFile(s *sign.Signer, path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path+".sig", s.Sign(data), 0o644)
+}
+
+// SignCatalogManifests ensures every manifest in cat has a signature beside it,
+// signing any that are missing. Called at startup so an origin's static catalog
+// is signed without a re-publish. Returns the number newly signed.
+func SignCatalogManifests(cat *Catalog, s *sign.Signer) (int, error) {
+	n := 0
+	for _, p := range cat.Manifests {
+		if _, err := os.Stat(p + ".sig"); err == nil {
+			continue
+		}
+		if err := signManifestFile(s, p); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 func cloneMap(m map[string]string) map[string]string {

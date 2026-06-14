@@ -16,16 +16,18 @@ import (
 	"github.com/luizeduardocarvalho/genomehub/internal/events"
 	"github.com/luizeduardocarvalho/genomehub/internal/fasta"
 	"github.com/luizeduardocarvalho/genomehub/internal/manifest"
+	"github.com/luizeduardocarvalho/genomehub/internal/sign"
 	"github.com/luizeduardocarvalho/genomehub/internal/store"
 	"github.com/spf13/cobra"
 )
 
 var (
-	downloadServer   string
-	downloadAssembly string
-	downloadOutput   string
-	downloadTracker  string
-	downloadParallel int
+	downloadServer    string
+	downloadAssembly  string
+	downloadOutput    string
+	downloadTracker   string
+	downloadParallel  int
+	downloadVerifyKey string
 )
 
 var downloadCmd = &cobra.Command{
@@ -47,6 +49,7 @@ func init() {
 	downloadCmd.Flags().StringVar(&downloadAssembly, "assembly", "", "assembly to download (required)")
 	downloadCmd.Flags().StringVar(&downloadOutput, "output", "", "output FASTA path (required)")
 	downloadCmd.Flags().IntVar(&downloadParallel, "parallel", 8, "number of segments to fetch concurrently (across peers)")
+	downloadCmd.Flags().StringVar(&downloadVerifyKey, "verify-key", "", "origin's ed25519 public key (hex or file); require + verify a signed manifest")
 	downloadCmd.MarkFlagRequired("server")
 	downloadCmd.MarkFlagRequired("assembly")
 	downloadCmd.MarkFlagRequired("output")
@@ -60,6 +63,8 @@ type downloader struct {
 	tracker  string
 	store    *store.Store
 	parallel int
+
+	verifyPub string // origin pubkey hex; when set, the manifest signature is required + verified
 
 	wire       atomic.Int64 // bytes received over the network
 	fetched    atomic.Int64 // segments fetched
@@ -80,6 +85,13 @@ func runDownload(_ *cobra.Command, _ []string) error {
 		tracker:  strings.TrimRight(downloadTracker, "/"),
 		store:    s,
 		parallel: downloadParallel,
+	}
+	if downloadVerifyKey != "" {
+		pub, err := sign.ResolvePublic(downloadVerifyKey)
+		if err != nil {
+			return fmt.Errorf("verify key: %w", err)
+		}
+		d.verifyPub = pub
 	}
 
 	chroms, err := d.fetchGenome(downloadAssembly)
@@ -115,6 +127,49 @@ func runDownload(_ *cobra.Command, _ []string) error {
 // isGHD1 reports whether body is a raw delta blob (vs a JSON recipe).
 func isGHD1(body []byte) bool {
 	return len(body) >= 4 && string(body[:4]) == "GHD1"
+}
+
+// handleManifestSig fetches the manifest's detached signature, verifies it
+// against the pinned origin key when --verify-key is set, and caches it beside
+// the manifest so this node can relay it. A missing signature is fatal only
+// when verification was requested.
+func (d *downloader) handleManifestSig(assembly string, manifestBody []byte) error {
+	sig, status, err := d.get("/genomes/" + assembly + "/manifest.sig")
+	if err != nil {
+		if d.verifyPub != "" {
+			return fmt.Errorf("fetch signature for %s: %w", assembly, err)
+		}
+		return nil
+	}
+	if status != http.StatusOK {
+		if d.verifyPub != "" {
+			return fmt.Errorf("manifest %s is not signed (status %d) but --verify-key was given", assembly, status)
+		}
+		return nil
+	}
+	if d.verifyPub != "" {
+		ok, err := sign.Verify(d.verifyPub, manifestBody, sig)
+		if err != nil {
+			return fmt.Errorf("verify %s: %w", assembly, err)
+		}
+		if !ok {
+			return fmt.Errorf("manifest %s signature does not match --verify-key (tampered or wrong origin)", assembly)
+		}
+		fmt.Fprintf(os.Stderr, "manifest %s signature verified\n", assembly)
+	}
+	saveManifestSig(assembly, sig)
+	return nil
+}
+
+// saveManifestSig caches a manifest's signature beside its manifest in the cache
+// dir (named to match the server's <manifest>.sig lookup), so a node serving
+// this box relays the origin's signature unchanged.
+func saveManifestSig(assembly string, sig []byte) {
+	dir := manifestCacheDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dir, assembly+".manifest.json.sig"), sig, 0o644)
 }
 
 // saveManifestCache writes a fetched manifest to the manifest cache dir so a
@@ -212,6 +267,14 @@ func (d *downloader) fromManifest(assembly string) ([]fasta.Chromosome, error) {
 	if status != http.StatusOK {
 		return nil, fmt.Errorf("GET manifest for %s: status %d", assembly, status)
 	}
+	// Fetch the detached signature (if any). Verify it against the pinned origin
+	// key when --verify-key is set — this is what makes a manifest relayed by an
+	// untrusted peer trustworthy. The signature is cached so this node can relay
+	// it in turn.
+	if err := d.handleManifestSig(assembly, body); err != nil {
+		return nil, err
+	}
+
 	var m manifest.Manifest
 	if err := json.Unmarshal(body, &m); err != nil {
 		return nil, fmt.Errorf("parse manifest %s: %w", assembly, err)

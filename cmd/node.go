@@ -27,6 +27,7 @@ var (
 	nodeRegistry  string
 	nodeTLSCert   string
 	nodeTLSKey    string
+	nodeSignKey   string
 )
 
 var nodeCmd = &cobra.Command{
@@ -53,6 +54,7 @@ func init() {
 	nodeCmd.Flags().StringVar(&nodeRegistry, "registry", "", "upstream registry URL (origin) for the /discover endpoint")
 	nodeCmd.Flags().StringVar(&nodeTLSCert, "tls-cert", "", "PEM certificate file; enables HTTPS when set with --tls-key")
 	nodeCmd.Flags().StringVar(&nodeTLSKey, "tls-key", "", "PEM private key file; enables HTTPS when set with --tls-cert")
+	nodeCmd.Flags().StringVar(&nodeSignKey, "sign-key", "", "ed25519 private key file (from `keygen`); signs served manifests")
 	nodeCmd.MarkFlagRequired("tracker")
 	rootCmd.AddCommand(nodeCmd)
 }
@@ -89,7 +91,11 @@ func runNode(_ *cobra.Command, _ []string) error {
 	}
 	mergeManifestCache(cat)
 
-	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker))
+	opts, err := signerOpts(cat, nodeSignKey)
+	if err != nil {
+		return err
+	}
+	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker, opts...))
 	warnIfControlPlaneOpen()
 	srv := &http.Server{Addr: nodeAddr, Handler: h}
 	go func() {

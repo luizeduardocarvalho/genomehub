@@ -246,12 +246,17 @@ TLS connection (trust the transport)            ← serve/node --tls-cert/--tls-
                     └── per-chromosome hash (verify any chromosome independently)
 ```
 
-TLS anchors the chain: it authenticates the origin so the manifest (and the
-hashes inside it) can be trusted. Segments themselves are content-addressed and
-re-hashed on arrival, so they need no transport trust — only the manifest does.
-Enable TLS with `--tls-cert`/`--tls-key` (see [TLS](#tls)). ed25519 manifest
-signing — for manifests served over untrusted peers, not just a trusted origin —
-is a planned follow-up.
+TLS anchors the chain at the transport: it authenticates the origin so the
+manifest (and the hashes inside it) can be trusted over that one hop. Segments
+themselves are content-addressed and re-hashed on arrival, so they need no
+transport trust — only the manifest does. Enable TLS with `--tls-cert`/`--tls-key`
+(see [TLS](#tls)).
+
+For the multi-party case — where a manifest may be **relayed by an untrusted
+peer**, not fetched directly from the origin — TLS is not enough (it only
+authenticates one hop). The origin signs each manifest with an ed25519 key; the
+detached signature travels with the manifest, so a downloader verifies the
+origin's signature no matter who served it (see [Signing](#manifest-signing)).
 
 ---
 
@@ -552,8 +557,34 @@ genomehub dash --server https://me:8443                             # sends it (
 - With no token set, the node starts with a loud `WARNING` that the control
   plane is unauthenticated.
 - This is the first auth layer; it gates the control plane and the write path
-  (`publish`, below). Per-party tokens / mTLS / signed requests are a later
-  refinement.
+  (`publish`, below). Per-party tokens / mTLS are a later refinement.
+
+#### Manifest signing
+
+Auth and TLS protect a *connection*; signing protects the *manifest itself*, so
+it stays trustworthy even when a peer (not the origin) serves it. The origin
+holds an ed25519 key and signs every manifest it serves; downloaders pin the
+origin's public key and verify.
+
+```bash
+genomehub keygen --out origin                 # writes origin.key (secret) + origin.pub
+genomehub serve --catalog ./catalog --sign-key origin.key   # origin signs what it serves
+genomehub download --server https://any-peer:8443 --assembly TAIR10 \
+  --output TAIR10.fa --verify-key origin.pub  # verifies the origin's signature
+```
+
+- The origin signs at install time (startup for its static catalog, on receive
+  for `publish`ed genomes); the detached signature is served at
+  `GET /genomes/{assembly}/manifest.sig`, and its public key at `GET /pubkey`.
+- `download --verify-key <hex|file>` **requires** a signature and aborts if it is
+  missing or doesn't match — `manifest ... signature does not match` on a wrong
+  key or tampered manifest. Without `--verify-key`, a present signature is cached
+  but not enforced (back-compatible).
+- A peer that downloaded a genome **caches and relays the origin's signature
+  unchanged**, so verification works against any source — the point of signing
+  over plain TLS.
+- This is origin-signing (the origin vouches for what it serves). Per-publisher
+  author signatures are a possible later layer.
 
 #### Publishing a genome to an origin
 
