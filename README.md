@@ -14,6 +14,83 @@ Think BitTorrent meets git objects, built specifically for biological sequence d
 
 ---
 
+## Install
+
+GenomeHub is a single static Go binary. The core researcher workflow — `import`,
+`reconstruct`, `verify`, `download`, `viz` — has **no external dependencies**.
+`minimap2` is only needed for the contributor/server commands (`align`,
+`reindex`, `work`); install it (`brew install minimap2`) only if you run those.
+
+**Prebuilt release** (recommended) — grab the archive for your OS/arch from the
+[releases page](https://github.com/luizeduardocarvalho/genomehub/releases),
+unpack, and put `genomehub` on your `PATH`:
+
+```bash
+tar xzf genomehub_*_$(uname -s)_$(uname -m).tar.gz
+sudo mv genomehub /usr/local/bin/
+genomehub version
+```
+
+**With the Go toolchain** (Go 1.24+):
+
+```bash
+go install github.com/luizeduardocarvalho/genomehub@latest
+```
+
+**From source:**
+
+```bash
+git clone https://github.com/luizeduardocarvalho/genomehub
+cd genomehub
+make install            # builds with version metadata → /usr/local/bin
+# or: make build        # just produces ./genomehub
+```
+
+Verify: `genomehub version` should print a version, commit, and build date.
+
+---
+
+## Quickstart (5 minutes, fully offline)
+
+No server, no network, no minimap2 — this proves the core round-trip and the
+deduplication payoff on genomes you already have. All state lives under
+`~/.genomehub` (override with `--store`).
+
+**1. Ingest a FASTA** — chunk it into content-addressed segments and write a manifest:
+
+```bash
+genomehub import --fasta genome.fa --organism "Arabidopsis thaliana" \
+  --assembly TAIR10 --output TAIR10.manifest.json
+```
+
+**2. Reconstruct it** — rebuild the FASTA from the manifest + stored segments:
+
+```bash
+genomehub reconstruct --manifest TAIR10.manifest.json --output rebuilt.fa
+```
+
+**3. Verify** — confirm the round-trip is byte-identical at the sequence level:
+
+```bash
+genomehub verify --original genome.fa --reconstructed rebuilt.fa
+# exits non-zero on any mismatch
+```
+
+**4. See the dedup** — import a *related* genome (same species accession, a prior
+version, anything sharing sequence) and compare. Shared segments are stored once:
+
+```bash
+genomehub import --fasta other.fa --organism "Arabidopsis thaliana" \
+  --assembly Ler0 --output Ler0.manifest.json
+genomehub viz TAIR10.manifest.json Ler0.manifest.json
+# bar chart of shared vs unique, bytes stored vs naive, savings %
+```
+
+For near-identical genomes (same species), `delta` beats segment dedup — see the
+Delta encoding section. For multi-machine distribution, see Distribution below.
+
+---
+
 ## Goals
 
 - **Reduce bandwidth costs** for institutions that publicly distribute genomic data (NCBI, Ensembl, PLAZA, Embrapa)
@@ -965,3 +1042,18 @@ See `docs/adr/`:
 - [ADR 0001](docs/adr/0001-delta-vs-segment-dedup-routing.md) — route storage by similarity: delta for near-identical genomes, segment dedup for diverged ones
 - [ADR 0002](docs/adr/0002-content-addressed-blobs-and-trust.md) — everything is a content-addressed blob; trust splits into correctness / availability / contribution; distributed MEM-finding; the O(N²) scaling boundary
 - [ADR 0003](docs/adr/0003-node-session-tracker-daemon.md) — node session lifecycle, the tracker, and the contribute daemon
+
+---
+
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE) — see [`LICENSE`](LICENSE).
+
+GenomeHub is **source-available, not open source**. You may use, modify, fork,
+and redistribute it freely **for any noncommercial purpose** — research,
+education, personal study, and use by academic, government, public-research, and
+other nonprofit organizations all qualify. Forks must keep this same license.
+
+**Commercial / for-profit use is not granted** by this license. If you want to
+use GenomeHub in a commercial context, contact the author for a separate
+commercial license.
