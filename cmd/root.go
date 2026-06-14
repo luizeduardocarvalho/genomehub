@@ -61,6 +61,9 @@ var rootCmd = &cobra.Command{
 		if authToken == "" {
 			authToken = os.Getenv("GENOMEHUB_TOKEN")
 		}
+		if authToken == "" {
+			authToken = loadCLIConfig().AuthToken // persisted fallback
+		}
 		if authToken != "" {
 			cmdHTTP.Transport = &bearerTransport{rt: http.DefaultTransport, token: authToken}
 		}

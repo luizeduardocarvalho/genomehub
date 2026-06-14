@@ -566,7 +566,10 @@ genomehub dash --server https://me:8443                             # sends it (
 
 - Server (`serve`/`node`) enforces the token; clients (`dash`, etc.) send it.
   Both read `--auth-token` or `GENOMEHUB_TOKEN` (env preferred — argv is visible
-  in `ps`).
+  in `ps`), falling back to a saved value. Publishers can store it once:
+  `genomehub config set auth-token <TOKEN>` (written owner-only to
+  `~/.genomehub/config.json`), and every command picks it up. **Distribute the
+  token, never the signing key.**
 - With no token set, the node starts with a loud `WARNING` that the control
   plane is unauthenticated.
 - This is the first auth layer; it gates the control plane and the write path
