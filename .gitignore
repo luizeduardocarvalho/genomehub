@@ -29,3 +29,5 @@ result.txt
 /sim/sketches/
 /sim/*-store/
 /sim/*.fa
+/genomehub
+/sim/host/
