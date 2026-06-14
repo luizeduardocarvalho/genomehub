@@ -234,12 +234,16 @@ func submitMEMs(coord, jobID, worker string, mems []jobs.MEM) (submitResult, err
 	return res, json.Unmarshal(body, &res)
 }
 
+// cmdHTTP bounds CLI/TUI calls (polling, actions) so a dead node surfaces an
+// error instead of hanging the command.
+var cmdHTTP = &http.Client{Timeout: 20 * time.Second}
+
 func postJSON(url string, v any) ([]byte, int, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, 0, err
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewReader(data))
+	resp, err := cmdHTTP.Post(url, "application/json", bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, err
 	}

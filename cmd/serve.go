@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	serveAddr    string
-	serveCatalog string
+	serveAddr     string
+	serveCatalog  string
+	serveRegistry string
 )
 
 var serveCmd = &cobra.Command{
@@ -34,6 +35,7 @@ Endpoints:
 func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", ":8080", "listen address")
 	serveCmd.Flags().StringVar(&serveCatalog, "catalog", ".", "directory of *.manifest.json and *.delta.* files to serve")
+	serveCmd.Flags().StringVar(&serveRegistry, "registry", "", "upstream registry URL for the /discover endpoint (default: self)")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -60,7 +62,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "    delta:    %s\n", a)
 	}
 
-	return http.ListenAndServe(serveAddr, httpapi.NewHandler(s, cat, eventsPath()))
+	return http.ListenAndServe(serveAddr, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), ""))
 }
 
 // mergeManifestCache overlays manifests previously fetched by `download` (kept in

@@ -88,3 +88,12 @@ func (s *Store) Has(hash string) (bool, error) {
 	}
 	return false, err
 }
+
+// Delete removes a segment by hash. Deleting an absent key is a no-op. Callers
+// must ensure no still-held genome references the hash (segments are shared, so
+// reference-counting is the caller's responsibility).
+func (s *Store) Delete(hash string) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete([]byte(hash))
+	})
+}

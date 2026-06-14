@@ -24,6 +24,7 @@ var (
 	nodeCatalog   string
 	nodeID        string
 	nodeHeartbeat time.Duration
+	nodeRegistry  string
 )
 
 var nodeCmd = &cobra.Command{
@@ -47,6 +48,7 @@ func init() {
 	nodeCmd.Flags().StringVar(&nodeCatalog, "catalog", ".", "directory of manifests/deltas to serve")
 	nodeCmd.Flags().StringVar(&nodeID, "id", "", "node id (default: advertised URL)")
 	nodeCmd.Flags().DurationVar(&nodeHeartbeat, "heartbeat", 30*time.Second, "heartbeat interval")
+	nodeCmd.Flags().StringVar(&nodeRegistry, "registry", "", "upstream registry URL (origin) for the /discover endpoint")
 	nodeCmd.MarkFlagRequired("tracker")
 	rootCmd.AddCommand(nodeCmd)
 }
@@ -74,7 +76,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 	}
 	mergeManifestCache(cat)
 
-	srv := &http.Server{Addr: nodeAddr, Handler: httpapi.NewHandler(s, cat, eventsPath())}
+	srv := &http.Server{Addr: nodeAddr, Handler: httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker)}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "serve error: %v\n", err)

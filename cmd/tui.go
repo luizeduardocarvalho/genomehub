@@ -286,7 +286,7 @@ func swarmStanding(serverBase string) string {
 }
 
 func getJSON(url string, v any) error {
-	resp, err := http.Get(url)
+	resp, err := cmdHTTP.Get(url)
 	if err != nil {
 		return err
 	}
