@@ -532,6 +532,29 @@ genomehub download --server https://origin:8443 --assembly Ler0 --output Ler0.fa
   run one — point it at the plain-HTTP `serve`/`node` on localhost. The built-in
   flags exist so a single binary needs no proxy.
 
+#### Authentication (control plane)
+
+The mutating control plane — `POST /actions/*` (download, manifest, delete,
+unseed, reconstruct) — is gated by a bearer token. **Set one on any
+network-reachable node**, or anyone who can reach it can delete or unseed your
+data. Read endpoints (segments, manifests, catalog, status, discover, healthz)
+stay open by design — content is public and content-addressed.
+
+```bash
+export GENOMEHUB_TOKEN=$(openssl rand -hex 32)   # env preferred (flags show in ps)
+genomehub node --tracker https://tracker:9000 --catalog ./catalog   # enforces it
+genomehub dash --server https://me:8443                             # sends it (same env)
+```
+
+- Server (`serve`/`node`) enforces the token; clients (`dash`, etc.) send it.
+  Both read `--auth-token` or `GENOMEHUB_TOKEN` (env preferred — argv is visible
+  in `ps`).
+- With no token set, the node starts with a loud `WARNING` that the control
+  plane is unauthenticated.
+- This is the first auth layer; it gates control today and is the gate the
+  upcoming write path (`publish` → `POST /segments`, `POST /manifests`) will
+  reuse. Per-party tokens / mTLS / signed requests are a later refinement.
+
 ### Distributed MEM-finding
 
 ```bash

@@ -89,7 +89,9 @@ func runNode(_ *cobra.Command, _ []string) error {
 	}
 	mergeManifestCache(cat)
 
-	srv := &http.Server{Addr: nodeAddr, Handler: httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker)}
+	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker))
+	warnIfControlPlaneOpen()
+	srv := &http.Server{Addr: nodeAddr, Handler: h}
 	go func() {
 		if err := listenAndServe(srv, nodeTLSCert, nodeTLSKey); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "serve error: %v\n", err)

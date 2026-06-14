@@ -66,8 +66,20 @@ func runServe(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "    delta:    %s\n", a)
 	}
 
-	h := httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "")
+	h := httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), ""))
+	warnIfControlPlaneOpen()
 	return listenAndServe(&http.Server{Addr: serveAddr, Handler: h}, serveTLSCert, serveTLSKey)
+}
+
+// warnIfControlPlaneOpen prints a loud warning when no token gates the mutating
+// /actions/* endpoints. Anyone who can reach the node could then trigger
+// downloads, deletes, or unseeds — set --auth-token (or GENOMEHUB_TOKEN).
+func warnIfControlPlaneOpen() {
+	if authToken == "" {
+		fmt.Fprintln(os.Stderr, "  WARNING: control plane (/actions/*) is UNAUTHENTICATED; set --auth-token or GENOMEHUB_TOKEN")
+	} else {
+		fmt.Fprintln(os.Stderr, "  auth:    control plane requires bearer token")
+	}
 }
 
 // listenAndServe starts srv with TLS when both cert and key are supplied, plain
