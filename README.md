@@ -1219,6 +1219,11 @@ See `docs/adr/`:
 - [ADR 0001](docs/adr/0001-delta-vs-segment-dedup-routing.md) — route storage by similarity: delta for near-identical genomes, segment dedup for diverged ones
 - [ADR 0002](docs/adr/0002-content-addressed-blobs-and-trust.md) — everything is a content-addressed blob; trust splits into correctness / availability / contribution; distributed MEM-finding; the O(N²) scaling boundary
 - [ADR 0003](docs/adr/0003-node-session-tracker-daemon.md) — node session lifecycle, the tracker, and the contribute daemon
+- [ADR 0004](docs/adr/0004-p2p-transport-libp2p.md) — keep HTTP-pull now; defer a true P2P transport (libp2p) until scale demands it
+
+## For users
+
+[docs/users.md](docs/users.md) — install (macOS / Linux / Windows), browse, download a genome, and optionally seed. Deploy your own swarm: [docs/deploy-swarm.md](docs/deploy-swarm.md).
 
 ---
 
