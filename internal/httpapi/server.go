@@ -49,6 +49,9 @@ type Catalog struct {
 func ScanCatalog(dir string) (*Catalog, error) {
 	c := &Catalog{Manifests: map[string]string{}, Deltas: map[string]string{}, Recipes: map[string]string{}}
 	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return c, nil // an empty/absent catalog dir is just an empty catalog
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -105,34 +105,33 @@ Windows is identical with `.\genomehub.exe` and backtick line-continuations.
 
 ---
 
-## 4. (Optional) Become a seeder
+## 4. (Optional) Become a seeder — one command
 
-If your machine is **publicly reachable** (a lab server / VPS with an open
-port), you can reshare what you hold and take load off the origin:
+`genomehub seed` sets everything up (data dir, identity key, sane defaults) and
+runs a node that serves what you hold.
 
+**Laptop / behind NAT** — auto-create a public tunnel (needs
+[`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+on PATH):
 ```bash
-genomehub keygen --out mynode
-genomehub node --tracker https://genomehub.duckdns.org:9000 \
-  --advertise https://your-public-host:8443 \
-  --store ./store --catalog ./catalog --identity mynode.key
+genomehub seed --tunnel
 ```
 
-**Behind home/office NAT?** A laptop can't accept inbound connections, so it
-can't serve peers directly (GenomeHub fetches over HTTP — a seeder must be a
-reachable server). To seed from a NAT'd machine, give it a public URL with a
-tunnel:
-
+**Public host (lab server / VPS)** — advertise your reachable URL:
 ```bash
-cloudflared tunnel --url http://localhost:8080 &     # prints a public https URL
-genomehub node --tracker https://genomehub.duckdns.org:9000 \
-  --advertise https://<that-public-url> \
-  --store ./store --catalog ./catalog --identity mynode.key
+genomehub seed --advertise https://your-host:8443
 ```
 
-In practice the swarm is carried by a handful of **public institutional
-seeders** (the origin + partner labs); laptops are consumers. Frictionless
-"download = seed from anywhere" needs a true P2P transport (see
-[ADR 0004](adr/0004-p2p-transport-libp2p.md)) and is future work.
+That's it. It announces to the tracker and serves your held segments; download a
+genome (section 3) and you're seeding it. (Without `--tunnel`/`--advertise` you
+still cache genomes locally but won't serve others. The control plane is
+auto-locked with a random token so a tunneled node isn't exposed.)
+
+Why a tunnel is needed: peers fetch over HTTP, so a seeder must be reachable —
+a NAT'd laptop can't accept inbound. In practice the swarm leans on a few
+**public institutional seeders** (origin + partner labs); laptops seed via tunnel
+while online. Frictionless "download = seed from anywhere" needs a true P2P
+transport (see [ADR 0004](adr/0004-p2p-transport-libp2p.md)) — future work.
 
 ---
 
