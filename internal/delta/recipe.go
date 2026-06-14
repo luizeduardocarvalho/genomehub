@@ -37,6 +37,11 @@ func ReadRecipe(path string) (*Recipe, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseRecipe(data)
+}
+
+// ParseRecipe decodes a recipe from its JSON bytes.
+func ParseRecipe(data []byte) (*Recipe, error) {
 	var r Recipe
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, err

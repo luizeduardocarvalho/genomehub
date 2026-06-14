@@ -654,6 +654,30 @@ genomehub tracker --addr :9000 --require-identity   # reject unsigned announce/l
   so it can't draw fetch traffic it would only 404. Pair with `--insecure` if
   nodes use self-signed TLS. Reputation can build on these signals next.
 
+#### Near-zero-cost hosting (static mirror)
+
+Reads are immutable and content-addressed, and the read API maps 1:1 to static
+object keys (`segments/{hash}`, `genomes/{a}/manifest`, `genomes/{a}/manifest.sig`,
+`deltas/{a}`). So an origin doesn't need a running server at all — `mirror`
+exports the whole catalog as a static tree you host on **free-egress object
+storage** (Cloudflare R2, Backblaze B2) behind a CDN:
+
+```bash
+genomehub mirror --catalog ./catalog --store ./store --out ./static \
+  --sign-key origin.key            # writes the signed static tree
+rclone copy ./static r2:my-bucket  # or: aws s3 sync / wrangler
+genomehub download --server https://cdn.example.org --assembly TAIR10 \
+  --output TAIR10.fa --verify-key origin.pub
+```
+
+The manifest signature is written into the tree, so downloads from a dumb static
+host still verify end-to-end (proven against a plain `python -m http.server`).
+With free-egress storage, a free-tier VM for the optional tracker, and peers
+seeding each other, hosting 100 genomes for hundreds of users runs at roughly
+**$0–5/month** — egress, normally ~90% of a cloud bill, is the part this design
+eliminates. (On GCP, by contrast, internet egress at ~$0.12/GB dominates; prefer
+R2/B2 or a donated institutional box.)
+
 ### Distributed MEM-finding
 
 ```bash
