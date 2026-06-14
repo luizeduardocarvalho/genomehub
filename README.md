@@ -16,10 +16,23 @@ Think BitTorrent meets git objects, built specifically for biological sequence d
 
 ## Install
 
+One-liner (auto-detects OS/arch, grabs the latest release):
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/luizeduardocarvalho/genomehub/main/install.sh | sh
+```
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/luizeduardocarvalho/genomehub/main/install.ps1 | iex
+```
+
 GenomeHub is a single static Go binary. The core researcher workflow — `import`,
 `reconstruct`, `verify`, `download`, `viz` — has **no external dependencies**.
 `minimap2` is only needed for the contributor/server commands (`align`,
 `reindex`, `work`); install it (`brew install minimap2`) only if you run those.
+
+Other install options below (prebuilt archives, `go install`, from source).
 
 **Prebuilt release** (recommended) — grab the archive for your OS/arch from the
 [releases page](https://github.com/luizeduardocarvalho/genomehub/releases),

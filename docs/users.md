@@ -17,6 +17,21 @@ This page assumes a live origin. The reference deployment:
 
 ## 1. Install
 
+**One-liner (recommended):**
+
+macOS / Linux:
+```bash
+curl -fsSL https://raw.githubusercontent.com/luizeduardocarvalho/genomehub/main/install.sh | sh
+```
+Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/luizeduardocarvalho/genomehub/main/install.ps1 | iex
+```
+Each detects your OS/arch, downloads the latest release, and puts `genomehub` on
+your PATH. Then `genomehub version` confirms it.
+
+<details><summary>Manual install (if you prefer)</summary>
+
 **macOS (Apple Silicon):**
 ```bash
 curl -L https://github.com/luizeduardocarvalho/genomehub/releases/latest/download/genomehub_0.1.1_darwin_arm64.tar.gz | tar xz
@@ -46,6 +61,7 @@ ARM → `windows_arm64`. Use **Windows Terminal / PowerShell 7** for the TUI.
 ```bash
 go install github.com/luizeduardocarvalho/genomehub@latest
 ```
+</details>
 
 No external dependencies for downloading. (`minimap2` is only needed for
 contributor commands like `reindex`/`align`, not for downloading.)
