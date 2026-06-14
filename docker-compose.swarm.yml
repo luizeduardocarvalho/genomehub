@@ -19,9 +19,10 @@
 #
 # Watch from the host (ports published below):
 #   ./genomehub top    --tracker http://localhost:9000 --interval 1s
-#   ./genomehub status --server  http://localhost:8080   # origin
-#   ./genomehub status --server  http://localhost:8081   # peer1
-#   ./genomehub status --server  http://localhost:8082   # peer2
+#   ./genomehub status --server  http://localhost:8081   # one node, flat panel
+#   # interactive tabbed TUI (Discover/Seeding/..., T/U/D/c/X/S actions):
+#   ./genomehub dash --server http://localhost:8081 --tracker http://localhost:9000 --id http://peer1:8080
+#   ./genomehub dash --server http://localhost:8080 --tracker http://localhost:9000 --id http://origin:8080
 
 services:
   tracker:
@@ -38,7 +39,8 @@ services:
     build: .
     command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
               "--addr", ":8080", "--advertise", "http://origin:8080",
-              "--catalog", "/data/catalog", "--heartbeat", "2s"]
+              "--catalog", "/data/catalog", "--heartbeat", "2s",
+              "--registry", "http://origin:8080"]
     volumes:
       - ./sim/origin-store:/data/store
       - ./sim/catalog:/data/catalog:ro
@@ -66,7 +68,8 @@ services:
     build: .
     command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
               "--addr", ":8080", "--advertise", "http://peer1:8080",
-              "--catalog", "/data/empty", "--heartbeat", "2s"]
+              "--catalog", "/data/empty", "--heartbeat", "2s",
+              "--registry", "http://origin:8080"]
     volumes:
       - peer1-store:/data/store
       - ./sim/empty-catalog:/data/empty:ro
@@ -93,7 +96,8 @@ services:
     build: .
     command: ["--store", "/data/store", "node", "--tracker", "http://tracker:9000",
               "--addr", ":8080", "--advertise", "http://peer2:8080",
-              "--catalog", "/data/empty", "--heartbeat", "2s"]
+              "--catalog", "/data/empty", "--heartbeat", "2s",
+              "--registry", "http://origin:8080"]
     volumes:
       - peer2-store:/data/store
       - ./sim/empty-catalog:/data/empty:ro
