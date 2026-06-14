@@ -6,16 +6,46 @@
 package tracker
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/luizeduardocarvalho/genomehub/internal/sign"
+	"github.com/zeebo/blake3"
 )
 
 // DefaultTimeout is how long a node may go without a heartbeat before it is
 // considered offline and dropped from peer lists.
 const DefaultTimeout = 90 * time.Second
+
+// announceSkew bounds how far an announce/leave timestamp may be from now, to
+// reject replayed or clock-skewed signed requests.
+const announceSkew = 5 * time.Minute
+
+// CanonicalMessage is the exact byte string a signed announce/leave covers. It
+// binds the operation, node identity (its public key), advertised address,
+// freshness timestamp, and a digest of the held-hash set, so a captured
+// signature can't be replayed as a different op or with a tampered hash list.
+// Node and tracker compute it identically.
+func CanonicalMessage(op, nodeID, address string, ts int64, hashesDigest string) []byte {
+	return []byte(fmt.Sprintf("%s\n%s\n%s\n%d\n%s", op, nodeID, address, ts, hashesDigest))
+}
+
+// HashesDigest is a stable blake3 digest over a held-hash set (order-independent).
+func HashesDigest(hashes []string) string {
+	cp := append([]string(nil), hashes...)
+	sort.Strings(cp)
+	h := blake3.New()
+	for _, x := range cp {
+		h.WriteString(x)
+		h.WriteString("\n")
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
 
 type nodeState struct {
 	Address  string
@@ -30,6 +60,11 @@ type Registry struct {
 	nodes   map[string]*nodeState          // node id -> state
 	content map[string]map[string]struct{} // hash -> set of node ids
 	timeout time.Duration
+
+	// RequireIdentity rejects unsigned announce/leave requests. When false,
+	// unsigned requests are accepted (backward compatible) but any request that
+	// IS signed is still verified.
+	RequireIdentity bool
 }
 
 func NewRegistry(timeout time.Duration) *Registry {
@@ -44,10 +79,40 @@ func NewRegistry(timeout time.Duration) *Registry {
 }
 
 type announceReq struct {
-	NodeID  string   `json:"node_id"`
-	Address string   `json:"address"`
-	Kind    string   `json:"kind"`
-	Hashes  []string `json:"hashes"`
+	NodeID    string   `json:"node_id"`
+	Address   string   `json:"address"`
+	Kind      string   `json:"kind"`
+	Hashes    []string `json:"hashes"`
+	Timestamp int64    `json:"ts,omitempty"`
+	Signature string   `json:"sig,omitempty"` // hex ed25519 sig over CanonicalMessage; NodeID is the public key
+}
+
+// verify authenticates a signed request. NodeID is the signer's public key, so
+// a valid signature proves the caller owns that identity — no node can announce
+// or leave as another. An unsigned request is allowed unless RequireIdentity.
+func (r *Registry) verify(op string, a announceReq) error {
+	if a.Signature == "" {
+		if r.RequireIdentity {
+			return fmt.Errorf("unsigned request rejected (tracker requires identity)")
+		}
+		return nil
+	}
+	if d := time.Since(time.Unix(a.Timestamp, 0)); d > announceSkew || d < -announceSkew {
+		return fmt.Errorf("timestamp outside acceptable window")
+	}
+	sig, err := hex.DecodeString(a.Signature)
+	if err != nil {
+		return fmt.Errorf("bad signature encoding")
+	}
+	msg := CanonicalMessage(op, a.NodeID, a.Address, a.Timestamp, HashesDigest(a.Hashes))
+	ok, err := sign.Verify(a.NodeID, msg, sig)
+	if err != nil {
+		return fmt.Errorf("verify identity: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("signature does not match node identity")
+	}
+	return nil
 }
 
 // announce registers (or refreshes) a node and replaces its held-hash set.
@@ -174,6 +239,10 @@ func (r *Registry) Handler() http.Handler {
 			http.Error(w, "bad announce", http.StatusBadRequest)
 			return
 		}
+		if err := r.verify("announce", a); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		r.announce(a)
 		w.WriteHeader(http.StatusNoContent)
 	})
@@ -195,6 +264,10 @@ func (r *Registry) Handler() http.Handler {
 		var a announceReq
 		if err := json.NewDecoder(req.Body).Decode(&a); err != nil || a.NodeID == "" {
 			http.Error(w, "bad leave", http.StatusBadRequest)
+			return
+		}
+		if err := r.verify("leave", a); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 		r.leave(a.NodeID)

@@ -628,6 +628,29 @@ genomehub node --tracker https://tracker:9000 --catalog ./catalog \
 - Uploaded segment/manifest bodies are already capped at 64 MiB (see
   [Publishing](#publishing-a-genome-to-an-origin)).
 
+#### Node identity
+
+By default a node's id is its advertised URL — anyone could announce under it.
+For a real network, give a node a stable cryptographic identity: its id becomes
+an ed25519 public key and its announces are signed, so no one else can announce
+or leave as it.
+
+```bash
+genomehub keygen --out mynode                 # reuse keygen; mynode.key + mynode.pub
+genomehub node --tracker https://tracker:9000 --catalog ./catalog \
+  --identity mynode.key                        # node id = pubkey, announces signed
+genomehub tracker --addr :9000 --require-identity   # reject unsigned announce/leave
+```
+
+- The signature covers the operation, identity, address, a timestamp, and a
+  digest of the announced hash set — so it can't be replayed as a different
+  operation, after the freshness window, or with a tampered hash list.
+- The tracker verifies any signed request; `--require-identity` additionally
+  rejects unsigned ones (`401`). Without it, unsigned nodes still work
+  (backward compatible).
+- This is the identity foundation; announce *content* verification (does a node
+  actually hold what it announces?) and reputation build on it.
+
 ### Distributed MEM-finding
 
 ```bash

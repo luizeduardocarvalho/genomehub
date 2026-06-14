@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	trackerAddr    string
-	trackerTimeout time.Duration
+	trackerAddr      string
+	trackerTimeout   time.Duration
+	trackerRequireID bool
 )
 
 var trackerCmd = &cobra.Command{
@@ -35,11 +36,16 @@ Endpoints:
 func init() {
 	trackerCmd.Flags().StringVar(&trackerAddr, "addr", ":9000", "listen address")
 	trackerCmd.Flags().DurationVar(&trackerTimeout, "timeout", tracker.DefaultTimeout, "heartbeat timeout before a node is dropped")
+	trackerCmd.Flags().BoolVar(&trackerRequireID, "require-identity", false, "reject unsigned announce/leave (nodes must run with --identity)")
 	rootCmd.AddCommand(trackerCmd)
 }
 
 func runTracker(_ *cobra.Command, _ []string) error {
 	reg := tracker.NewRegistry(trackerTimeout)
+	reg.RequireIdentity = trackerRequireID
 	fmt.Fprintf(os.Stderr, "tracker on %s (timeout %s)\n", trackerAddr, trackerTimeout)
+	if trackerRequireID {
+		fmt.Fprintln(os.Stderr, "  identity: required (unsigned announce/leave rejected)")
+	}
 	return http.ListenAndServe(trackerAddr, reg.Handler())
 }

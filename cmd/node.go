@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,7 +14,9 @@ import (
 	"time"
 
 	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
+	"github.com/luizeduardocarvalho/genomehub/internal/sign"
 	"github.com/luizeduardocarvalho/genomehub/internal/store"
+	trackerpkg "github.com/luizeduardocarvalho/genomehub/internal/tracker"
 	"github.com/spf13/cobra"
 )
 
@@ -30,6 +33,7 @@ var (
 	nodeSignKey   string
 	nodeRate      float64
 	nodeCacheMax  string
+	nodeIdentity  string
 )
 
 var nodeCmd = &cobra.Command{
@@ -59,6 +63,7 @@ func init() {
 	nodeCmd.Flags().StringVar(&nodeSignKey, "sign-key", "", "ed25519 private key file (from `keygen`); signs served manifests")
 	nodeCmd.Flags().Float64Var(&nodeRate, "rate", 0, "max requests/second per client IP (0 = unlimited)")
 	nodeCmd.Flags().StringVar(&nodeCacheMax, "cache-max", "", "bounded LRU cache size, e.g. 50GB (empty = unbounded)")
+	nodeCmd.Flags().StringVar(&nodeIdentity, "identity", "", "ed25519 private key file (from `keygen`); node id becomes its public key and announces are signed")
 	nodeCmd.MarkFlagRequired("tracker")
 	rootCmd.AddCommand(nodeCmd)
 }
@@ -80,6 +85,22 @@ func runNode(_ *cobra.Command, _ []string) error {
 	id := nodeID
 	if id == "" {
 		id = advertise
+	}
+
+	// Stable cryptographic identity: the node id becomes its public key and
+	// announce/leave are signed, so no other node can announce or leave as it.
+	var idSigner *sign.Signer
+	if nodeIdentity != "" {
+		sg, lerr := sign.LoadSigner(nodeIdentity)
+		if lerr != nil {
+			return fmt.Errorf("load identity: %w", lerr)
+		}
+		idSigner = sg
+		if nodeID != "" {
+			fmt.Fprintln(os.Stderr, "  note: --identity overrides --id")
+		}
+		id = sg.PublicHex()
+		fmt.Fprintf(os.Stderr, "  identity: %s\n", id)
 	}
 	tracker := strings.TrimRight(nodeTracker, "/")
 
@@ -121,6 +142,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 			return
 		}
 		body := announceBody{NodeID: id, Address: advertise, Kind: "node", Hashes: hashes}
+		signBody("announce", &body, idSigner)
 		if err := trackerPost(tracker, "/announce", body); err != nil {
 			fmt.Fprintf(os.Stderr, "announce failed: %v\n", err)
 			return
@@ -143,7 +165,9 @@ func runNode(_ *cobra.Command, _ []string) error {
 		select {
 		case <-ctx.Done():
 			fmt.Fprintln(os.Stderr, "\nleaving network...")
-			_ = trackerPost(tracker, "/leave", announceBody{NodeID: id})
+			lb := announceBody{NodeID: id, Address: advertise}
+			signBody("leave", &lb, idSigner)
+			_ = trackerPost(tracker, "/leave", lb)
 			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			srv.Shutdown(shutCtx)
 			cancel()
@@ -158,10 +182,24 @@ func runNode(_ *cobra.Command, _ []string) error {
 }
 
 type announceBody struct {
-	NodeID  string   `json:"node_id"`
-	Address string   `json:"address"`
-	Kind    string   `json:"kind,omitempty"`
-	Hashes  []string `json:"hashes,omitempty"`
+	NodeID    string   `json:"node_id"`
+	Address   string   `json:"address"`
+	Kind      string   `json:"kind,omitempty"`
+	Hashes    []string `json:"hashes,omitempty"`
+	Timestamp int64    `json:"ts,omitempty"`
+	Signature string   `json:"sig,omitempty"`
+}
+
+// signBody fills the timestamp and ed25519 signature over the tracker's
+// canonical message, proving this node owns its identity. No-op without an
+// identity key (unsigned announce, backward compatible).
+func signBody(op string, b *announceBody, sg *sign.Signer) {
+	if sg == nil {
+		return
+	}
+	b.Timestamp = time.Now().Unix()
+	msg := trackerpkg.CanonicalMessage(op, b.NodeID, b.Address, b.Timestamp, trackerpkg.HashesDigest(b.Hashes))
+	b.Signature = hex.EncodeToString(sg.Sign(msg))
 }
 
 // trackerPost POSTs a JSON body and treats any non-2xx as an error.
