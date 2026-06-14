@@ -6,13 +6,24 @@ import (
 	"strings"
 )
 
-// IsControlPath reports whether a request targets a mutating control-plane
-// endpoint that must be authenticated when a token is configured. Today that is
-// everything under /actions/ (download/manifest/delete/unseed/reconstruct).
-// Future write endpoints (publish: POST /segments, POST /manifests) should be
-// added here so a single token gates the whole write surface.
+// IsControlPath reports whether a request targets a mutating endpoint that must
+// be authenticated when a token is configured. Covers the node control plane
+// (/actions/*) and the publisher write surface (POST /segments/{hash}, POST
+// /genomes/{assembly}/manifest). Reads of those same paths (GET/HEAD segments,
+// GET manifest) are not gated — content is public and content-addressed.
 func IsControlPath(r *http.Request) bool {
-	return strings.HasPrefix(r.URL.Path, "/actions/")
+	if strings.HasPrefix(r.URL.Path, "/actions/") {
+		return true
+	}
+	if r.Method == http.MethodPost {
+		if strings.HasPrefix(r.URL.Path, "/segments/") {
+			return true
+		}
+		if strings.HasPrefix(r.URL.Path, "/genomes/") && strings.HasSuffix(r.URL.Path, "/manifest") {
+			return true
+		}
+	}
+	return false
 }
 
 // ControlAuth wraps next so control-plane requests require a bearer token.

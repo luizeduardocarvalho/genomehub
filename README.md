@@ -551,9 +551,30 @@ genomehub dash --server https://me:8443                             # sends it (
   in `ps`).
 - With no token set, the node starts with a loud `WARNING` that the control
   plane is unauthenticated.
-- This is the first auth layer; it gates control today and is the gate the
-  upcoming write path (`publish` → `POST /segments`, `POST /manifests`) will
-  reuse. Per-party tokens / mTLS / signed requests are a later refinement.
+- This is the first auth layer; it gates the control plane and the write path
+  (`publish`, below). Per-party tokens / mTLS / signed requests are a later
+  refinement.
+
+#### Publishing a genome to an origin
+
+`publish` is how a second party contributes a genome without shell access to the
+origin box. Import locally, then push:
+
+```bash
+genomehub import --fasta my-soybean.fa --organism "Glycine max" \
+  --assembly MySoy --output MySoy.manifest.json
+genomehub publish --manifest MySoy.manifest.json \
+  --server https://origin:8443                 # --auth-token / GENOMEHUB_TOKEN if the origin enforces one
+```
+
+- Only segments the origin is **missing** are uploaded — it probes `HEAD
+  /segments/{hash}` first, so re-publishing or publishing a genome that overlaps
+  one already there transfers little (content-addressed dedup, in reverse).
+- The origin **re-hashes every uploaded segment** — your push is untrusted, so a
+  mislabeled segment is rejected (`400 hash mismatch`) and can't poison the store.
+- The manifest is accepted only once **all** its segments are present
+  (`422` otherwise), so the catalog never gains an unreconstructable genome.
+- Writes are auth-gated like the control plane; reads stay open.
 
 ### Distributed MEM-finding
 

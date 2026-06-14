@@ -401,6 +401,13 @@ func NewHandler(s *store.Store, cat *Catalog, eventsPath, registryURL, manifestD
 		w.Write(data)
 	})
 
+	// Write surface (gated by ControlAuth — see IsControlPath). A publisher
+	// probes HEAD to skip segments the origin already holds, uploads the rest,
+	// then POSTs the manifest (accepted only once all its segments are present).
+	mux.HandleFunc("HEAD /segments/{hash}", srv.hasSegment)
+	mux.HandleFunc("POST /segments/{hash}", srv.putSegment)
+	mux.HandleFunc("POST /genomes/{assembly}/manifest", srv.receiveManifest)
+
 	mux.HandleFunc("GET /genomes/{assembly}/manifest", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := srv.cur().Manifests[r.PathValue("assembly")]
 		if !ok {
@@ -581,12 +588,23 @@ func (srv *server) trackManifest(assembly string) (int, error) {
 	if m.Assembly == "" {
 		return 0, fmt.Errorf("registry returned an empty manifest for %q", assembly)
 	}
-	if err := os.MkdirAll(srv.manifestDir, 0o755); err != nil {
+	if _, err := srv.installManifest(&m); err != nil {
 		return 0, err
+	}
+	return m.Version, nil
+}
+
+// installManifest persists m to manifestDir and splices it into the catalog
+// copy-on-write, invalidating cached coverage. Shared by trackManifest (pull
+// from upstream) and receiveManifest (push from a publisher). Caller ensures
+// manifestDir is configured.
+func (srv *server) installManifest(m *manifest.Manifest) (string, error) {
+	if err := os.MkdirAll(srv.manifestDir, 0o755); err != nil {
+		return "", err
 	}
 	path := filepath.Join(srv.manifestDir, m.Assembly+".manifest.json")
 	if err := m.Write(path); err != nil {
-		return 0, fmt.Errorf("persist manifest: %w", err)
+		return "", fmt.Errorf("persist manifest: %w", err)
 	}
 
 	// Splice into a fresh catalog (copy-on-write) so concurrent readers are safe.
@@ -605,7 +623,7 @@ func (srv *server) trackManifest(assembly string) (int, error) {
 	delete(srv.covCache, m.Assembly)
 	delete(srv.discCache, m.Assembly)
 	srv.mu.Unlock()
-	return m.Version, nil
+	return path, nil
 }
 
 func cloneMap(m map[string]string) map[string]string {

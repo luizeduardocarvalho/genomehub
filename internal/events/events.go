@@ -19,6 +19,7 @@ type Op string
 const (
 	Import   Op = "import"
 	Download Op = "download"
+	Publish  Op = "publish"
 )
 
 // Event is one local operation: what happened, to which assembly, how big.

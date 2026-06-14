@@ -25,6 +25,12 @@ func TestControlAuth(t *testing.T) {
 		{"control wrong token rejected", "secret", "/actions/delete", "POST", "Bearer nope", 401},
 		{"control right token allowed", "secret", "/actions/delete", "POST", "Bearer secret", 200},
 		{"control prefix-token rejected", "secret", "/actions/delete", "POST", "Bearer secretx", 401},
+		{"segment upload gated", "secret", "/segments/abc", "POST", "", 401},
+		{"segment upload allowed", "secret", "/segments/abc", "POST", "Bearer secret", 200},
+		{"segment HEAD open", "secret", "/segments/abc", "HEAD", "", 200},
+		{"manifest push gated", "secret", "/genomes/X/manifest", "POST", "", 401},
+		{"manifest push allowed", "secret", "/genomes/X/manifest", "POST", "Bearer secret", 200},
+		{"manifest GET open", "secret", "/genomes/X/manifest", "GET", "", 200},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

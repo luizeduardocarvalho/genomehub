@@ -53,8 +53,16 @@ func Read(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(data)
+}
+
+// Parse decodes a manifest from its JSON bytes.
+func Parse(data []byte) (*Manifest, error) {
 	var m Manifest
-	return &m, json.Unmarshal(data, &m)
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
 }
 
 func ComputeSegmentsRoot(chroms []Chromosome) string {
