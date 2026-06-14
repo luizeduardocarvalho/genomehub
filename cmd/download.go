@@ -190,13 +190,16 @@ func (d *downloader) fetchGenome(assembly string) ([]fasta.Chromosome, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch status {
-	case http.StatusOK:
+	switch {
+	case status == http.StatusOK:
 		if isGHD1(body) {
 			return d.fromDelta(body)
 		}
 		return d.fromDeltaRecipe(body)
-	case http.StatusNotFound:
+	case status == http.StatusNotFound || status == http.StatusForbidden:
+		// No delta for this assembly → it's a manifest genome. Static hosts
+		// (object storage / CDN) sometimes answer a missing key with 403 rather
+		// than 404, so treat both as "absent" and fall through to the manifest.
 		return d.fromManifest(assembly)
 	default:
 		return nil, fmt.Errorf("GET /deltas/%s: status %d", assembly, status)

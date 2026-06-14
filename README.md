@@ -1239,7 +1239,11 @@ See `docs/adr/`:
 
 ## For users
 
-[docs/users.md](docs/users.md) — install (macOS / Linux / Windows), browse, download a genome, and optionally seed. Deploy your own swarm: [docs/deploy-swarm.md](docs/deploy-swarm.md).
+[docs/users.md](docs/users.md) — install (macOS / Linux / Windows), browse, download a genome, and optionally seed.
+
+Deploy:
+- [docs/deploy-mirror.md](docs/deploy-mirror.md) — **recommended backbone**: static mirror on Cloudflare R2 (free egress, no server to run).
+- [docs/deploy-swarm.md](docs/deploy-swarm.md) — optional live P2P swarm (tracker + origin node) for peer offload.
 
 ---
 
