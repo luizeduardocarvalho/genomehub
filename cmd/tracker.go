@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/luizeduardocarvalho/genomehub/internal/httpapi"
 	"github.com/luizeduardocarvalho/genomehub/internal/tracker"
 	"github.com/spf13/cobra"
 )
@@ -53,5 +54,5 @@ func runTracker(_ *cobra.Command, _ []string) error {
 	if trackerVerifyAnn {
 		fmt.Fprintln(os.Stderr, "  verify:   announced segments are spot-checked")
 	}
-	return http.ListenAndServe(trackerAddr, reg.Handler())
+	return http.ListenAndServe(trackerAddr, httpapi.CORS(reg.Handler()))
 }

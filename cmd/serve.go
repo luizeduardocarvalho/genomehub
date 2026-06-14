@@ -83,7 +83,7 @@ func runServe(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	h := httpapi.RateLimit(serveRate, httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "", opts...)))
+	h := httpapi.RateLimit(serveRate, httpapi.CORS(httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), serveRegistry, manifestCacheDir(), "", opts...))))
 	warnIfControlPlaneOpen()
 	return listenAndServe(&http.Server{Addr: serveAddr, Handler: h}, serveTLSCert, serveTLSKey)
 }

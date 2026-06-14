@@ -124,7 +124,7 @@ func runNode(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	h := httpapi.RateLimit(nodeRate, httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker, opts...)))
+	h := httpapi.RateLimit(nodeRate, httpapi.CORS(httpapi.ControlAuth(authToken, httpapi.NewHandler(s, cat, eventsPath(), nodeRegistry, manifestCacheDir(), tracker, opts...))))
 	warnIfControlPlaneOpen()
 	srv := &http.Server{Addr: nodeAddr, Handler: h}
 	go func() {

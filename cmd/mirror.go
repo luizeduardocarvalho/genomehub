@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,6 +93,18 @@ func runMirror(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// registry.json: a browsable catalog summary (same shape as GET /registry),
+	// so a static front-end can list genomes straight from the mirror.
+	type regEntry struct {
+		Assembly string `json:"assembly"`
+		Organism string `json:"organism,omitempty"`
+		Version  int    `json:"version"`
+		Segments int    `json:"segments"`
+		Bases    int    `json:"bases"`
+		Kind     string `json:"kind"`
+	}
+	var registry []regEntry
+
 	// Manifests + their segments + (optional) signatures.
 	for a, path := range cat.Manifests {
 		raw, err := os.ReadFile(path)
@@ -110,13 +123,19 @@ func runMirror(_ *cobra.Command, _ []string) error {
 		if err != nil {
 			return fmt.Errorf("parse manifest %s: %w", a, err)
 		}
+		segs := 0
 		for _, c := range m.Chromosomes {
 			for _, seg := range c.Segments {
 				if err := writeSeg(seg.Hash); err != nil {
 					return err
 				}
+				segs++
 			}
 		}
+		registry = append(registry, regEntry{
+			Assembly: m.Assembly, Organism: m.Organism, Version: m.Version,
+			Segments: segs, Bases: m.TotalBases, Kind: "manifest",
+		})
 	}
 
 	// Raw delta blobs.
@@ -148,6 +167,14 @@ func runMirror(_ *cobra.Command, _ []string) error {
 				return err
 			}
 		}
+	}
+
+	regBytes, err := json.MarshalIndent(registry, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := writeMirror(mirrorOut, "registry.json", regBytes); err != nil {
+		return err
 	}
 
 	if signer != nil {
