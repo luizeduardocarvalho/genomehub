@@ -14,6 +14,7 @@ var (
 	trackerAddr      string
 	trackerTimeout   time.Duration
 	trackerRequireID bool
+	trackerVerifyAnn bool
 )
 
 var trackerCmd = &cobra.Command{
@@ -37,15 +38,20 @@ func init() {
 	trackerCmd.Flags().StringVar(&trackerAddr, "addr", ":9000", "listen address")
 	trackerCmd.Flags().DurationVar(&trackerTimeout, "timeout", tracker.DefaultTimeout, "heartbeat timeout before a node is dropped")
 	trackerCmd.Flags().BoolVar(&trackerRequireID, "require-identity", false, "reject unsigned announce/leave (nodes must run with --identity)")
+	trackerCmd.Flags().BoolVar(&trackerVerifyAnn, "verify-announce", false, "spot-check that announcing nodes actually serve a sample of the hashes they claim")
 	rootCmd.AddCommand(trackerCmd)
 }
 
 func runTracker(_ *cobra.Command, _ []string) error {
 	reg := tracker.NewRegistry(trackerTimeout)
 	reg.RequireIdentity = trackerRequireID
+	reg.VerifyAnnounce = trackerVerifyAnn
 	fmt.Fprintf(os.Stderr, "tracker on %s (timeout %s)\n", trackerAddr, trackerTimeout)
 	if trackerRequireID {
 		fmt.Fprintln(os.Stderr, "  identity: required (unsigned announce/leave rejected)")
+	}
+	if trackerVerifyAnn {
+		fmt.Fprintln(os.Stderr, "  verify:   announced segments are spot-checked")
 	}
 	return http.ListenAndServe(trackerAddr, reg.Handler())
 }

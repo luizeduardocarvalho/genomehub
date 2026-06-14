@@ -648,8 +648,11 @@ genomehub tracker --addr :9000 --require-identity   # reject unsigned announce/l
 - The tracker verifies any signed request; `--require-identity` additionally
   rejects unsigned ones (`401`). Without it, unsigned nodes still work
   (backward compatible).
-- This is the identity foundation; announce *content* verification (does a node
-  actually hold what it announces?) and reputation build on it.
+- `tracker --verify-announce` additionally spot-checks that an announcing node
+  actually serves a random sample of the hashes it claims (`HEAD /segments/{hash}`
+  at its address); a node announcing content it doesn't hold is rejected (`422`),
+  so it can't draw fetch traffic it would only 404. Pair with `--insecure` if
+  nodes use self-signed TLS. Reputation can build on these signals next.
 
 ### Distributed MEM-finding
 

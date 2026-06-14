@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,6 +67,15 @@ type Registry struct {
 	// unsigned requests are accepted (backward compatible) but any request that
 	// IS signed is still verified.
 	RequireIdentity bool
+
+	// VerifyAnnounce makes the tracker spot-check that an announcing node
+	// actually serves a random sample of the hashes it claims, by probing
+	// HEAD /segments/{hash} at its advertised address. A node that announces
+	// content it does not hold is rejected, so it can't draw fetch traffic it
+	// will only 404.
+	VerifyAnnounce bool
+	verifySample   int
+	httpClient     *http.Client
 }
 
 func NewRegistry(timeout time.Duration) *Registry {
@@ -72,10 +83,48 @@ func NewRegistry(timeout time.Duration) *Registry {
 		timeout = DefaultTimeout
 	}
 	return &Registry{
-		nodes:   map[string]*nodeState{},
-		content: map[string]map[string]struct{}{},
-		timeout: timeout,
+		nodes:        map[string]*nodeState{},
+		content:      map[string]map[string]struct{}{},
+		timeout:      timeout,
+		verifySample: 3,
+		httpClient:   &http.Client{Timeout: 3 * time.Second},
 	}
+}
+
+// verifyHeld probes a random sample of the announced hashes against the node's
+// advertised address (HEAD /segments/{hash}); any sampled hash the node does
+// not serve fails the announce. Sampling keeps the cost bounded for nodes that
+// hold millions of segments.
+func (r *Registry) verifyHeld(a announceReq) error {
+	addr := strings.TrimRight(a.Address, "/")
+	for _, h := range sampleHashes(a.Hashes, r.verifySample) {
+		req, err := http.NewRequest(http.MethodHead, addr+"/segments/"+strings.TrimPrefix(h, "blake3:"), nil)
+		if err != nil {
+			return err
+		}
+		resp, err := r.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("probe %s: %w", h, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("node does not serve announced segment %s (status %d)", h, resp.StatusCode)
+		}
+	}
+	return nil
+}
+
+// sampleHashes returns up to k distinct hashes chosen at random.
+func sampleHashes(hashes []string, k int) []string {
+	if len(hashes) <= k {
+		return hashes
+	}
+	perm := rand.Perm(len(hashes))[:k]
+	out := make([]string, k)
+	for i, j := range perm {
+		out[i] = hashes[j]
+	}
+	return out
 }
 
 type announceReq struct {
@@ -242,6 +291,12 @@ func (r *Registry) Handler() http.Handler {
 		if err := r.verify("announce", a); err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
+		}
+		if r.VerifyAnnounce && len(a.Hashes) > 0 {
+			if err := r.verifyHeld(a); err != nil {
+				http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+				return
+			}
 		}
 		r.announce(a)
 		w.WriteHeader(http.StatusNoContent)
